@@ -1,0 +1,57 @@
+version: "3"
+
+services:
+  web:
+    restart: always
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    command: ["python", "manage.py", "runserver"]
+    ports:
+      - 8000:8000
+    env_file:
+      - ./.env.dev
+    volumes:
+      - .:/usr/src/app/
+    depends_on:
+      - redis
+
+  redis:
+    restart: always
+    image: redis
+    ports:
+    - 6379:6379
+
+  flower:
+    image: mher/flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    ports:
+        - 5555:5555
+    depends_on:
+        - redis
+
+  worker1:
+    build:
+      context: ./
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./workers:/app/backend/workers
+    command: ["celery", "-A", "backend", "worker", "-n", "can_create_sale_worker", "--loglevel=INFO", "-Q", "can_create_sale"]
+
+  worker2:
+    build:
+      context: ./
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./workers:/app/backend/workers
+    command: ["celery", "-A", "backend", "worker", "-n", "create_sale_worker", "--loglevel=INFO", "-Q", "create_sale"]
